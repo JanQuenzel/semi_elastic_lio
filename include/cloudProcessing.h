@@ -49,7 +49,7 @@ namespace velodyne_ros {
 	 	PCL_ADD_POINT4D;
 	 	float intensity;
 	 	float time;
-	 	uint16_t ring;
+                std::uint16_t ring;
 	 	EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 	};
 }
@@ -60,15 +60,15 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(velodyne_ros::Point,
     (float, z, z)
     (float, intensity, intensity)
     (float, time, time)
-    (uint16_t, ring, ring)
+    (std::uint16_t, ring, ring)
 )
 
 namespace robosense_ros
 {
     struct EIGEN_ALIGN16 Point {
         PCL_ADD_POINT4D;
-        uint8_t intensity;
-        uint16_t ring = 0;
+        std::uint8_t intensity;
+        std::uint16_t ring = 0;
         double timestamp = 0;
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     };
@@ -78,8 +78,8 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(robosense_ros::Point,
     (float, x, x)
     (float, y, y)
     (float, z, z)
-    (uint8_t, intensity, intensity)
-    (uint16_t, ring, ring)
+    (std::uint8_t, intensity, intensity)
+    (std::uint16_t, ring, ring)
     (double, timestamp, timestamp)
 )
 
@@ -89,11 +89,11 @@ namespace ouster_ros
     {
         PCL_ADD_POINT4D;
         float intensity;
-        uint32_t t;
-        uint16_t reflectivity;
-        uint8_t ring;
-        uint16_t ambient;
-        uint32_t range;
+        std::uint32_t t;
+        std::uint16_t reflectivity;
+        std::uint8_t ring;
+        std::uint16_t ambient;
+        std::uint32_t range;
         EIGEN_MAKE_ALIGNED_OPERATOR_NEW
     };
 }
@@ -103,11 +103,11 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
     (float, y, y)
     (float, z, z)
     (float, intensity, intensity)
-    (uint32_t, t, t)
-    (uint16_t, reflectivity, reflectivity)
-    (uint8_t, ring, ring)
-    (uint16_t, ambient, ambient)
-    (uint32_t, range, range)
+    (std::uint32_t, t, t)
+    (std::uint16_t, reflectivity, reflectivity)
+    (std::uint8_t, ring, ring)
+    (std::uint16_t, ambient, ambient)
+    (std::uint32_t, range, range)
 )
 
 class cloudProcessing

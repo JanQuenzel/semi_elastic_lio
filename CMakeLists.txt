@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0.2)
 project(semi_elastic_lio)
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -O3")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -O3")
 
 find_package(catkin REQUIRED COMPONENTS
   eigen_conversions
@@ -45,7 +45,7 @@ if (NOT tessil_POPULATED)
 endif ()
 
 find_package(Eigen3 REQUIRED)
-find_package(PCL 1.7 REQUIRED)
+find_package(PCL 1.10 REQUIRED)
 find_package(Ceres REQUIRED)
 
 catkin_package(

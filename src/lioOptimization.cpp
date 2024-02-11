@@ -1,5 +1,7 @@
 #include "lioOptimization.h"
 
+std::shared_ptr<std::ofstream> posesFile = nullptr;
+
 cloudFrame::cloudFrame(std::vector<point3D> &point_frame_, std::vector<point3D> &const_frame_, state *p_state_)
 {
     point_frame.insert(point_frame.end(), point_frame_.begin(), point_frame_.end());
@@ -61,7 +63,7 @@ void estimationSummary::release()
 
 lioOptimization::lioOptimization()
 {
-	allocateMemory();
+    allocateMemory();
 
     readParameters();
 
@@ -940,14 +942,18 @@ void lioOptimization::stateEstimation(std::vector<point3D> &const_frame, double 
             staticInitialization(p_frame);
     }
 
-    std::cout << "after solution: " << std::endl;
-    std::cout << "rotation_begin: " << p_frame->p_state->rotation_begin.x() << " " << p_frame->p_state->rotation_begin.y() << " " 
-              << p_frame->p_state->rotation_begin.z() << " " << p_frame->p_state->rotation_begin.w() << std::endl;
-    std::cout << "translation_begin: " << p_frame->p_state->translation_begin.x() << " " << p_frame->p_state->translation_begin.y() << " " << p_frame->p_state->translation_begin.z() << std::endl;
+    constexpr bool print_info = false;
+    if constexpr ( print_info )
+    {
+        std::cout << "after solution: " << std::endl;
+        std::cout << "rotation_begin: " << p_frame->p_state->rotation_begin.x() << " " << p_frame->p_state->rotation_begin.y() << " "
+                  << p_frame->p_state->rotation_begin.z() << " " << p_frame->p_state->rotation_begin.w() << std::endl;
+        std::cout << "translation_begin: " << p_frame->p_state->translation_begin.x() << " " << p_frame->p_state->translation_begin.y() << " " << p_frame->p_state->translation_begin.z() << std::endl;
 
-    std::cout << "rotation_end: " << p_frame->p_state->rotation.x() << " " << p_frame->p_state->rotation.y() << " " 
-              << p_frame->p_state->rotation.z() << " " << p_frame->p_state->rotation.w() << std::endl;
-    std::cout << "translation_end: " << p_frame->p_state->translation.x() << " " << p_frame->p_state->translation.y() << " " << p_frame->p_state->translation.z() << std::endl;
+        std::cout << "rotation_end: " << p_frame->p_state->rotation.x() << " " << p_frame->p_state->rotation.y() << " "
+                  << p_frame->p_state->rotation.z() << " " << p_frame->p_state->rotation.w() << std::endl;
+        std::cout << "translation_end: " << p_frame->p_state->translation.x() << " " << p_frame->p_state->translation.y() << " " << p_frame->p_state->translation.z() << std::endl;
+    }
 
     imu_pro->last_state = imu_pro->current_state;
     imu_pro->current_state = new state(imu_pro->last_state, false);
@@ -1087,6 +1093,17 @@ void lioOptimization::publish_odometry(const ros::Publisher & pubOdomAftMapped, 
                                              p_frame->p_state->translation.y(), 
                                              p_frame->p_state->translation.z()));
     tfBroadcaster.sendTransform(laserOdometryTrans);
+
+
+    {
+        // write to file:
+        if ( ! posesFile ) posesFile = std::make_shared<std::ofstream>("./semi_elastic_lio_after_map_poses.txt");
+        if( posesFile && posesFile->is_open() )
+        {
+             (*posesFile) << int64_t(1e9 * p_frame->time_sweep_end) << " " << p_frame->p_state->translation.x() << " " << p_frame->p_state->translation.y() << " " << p_frame->p_state->translation.z()
+                          << " " << p_frame->p_state->rotation.x() << " " << p_frame->p_state->rotation.y() << " " << p_frame->p_state->rotation.z() << " " << p_frame->p_state->rotation.w() << std::endl;
+        }
+    }
 }
 
 void lioOptimization::run()

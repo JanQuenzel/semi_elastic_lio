@@ -106,7 +106,7 @@ void lioOptimization::staticInitialization(cloudFrame *p_frame)
             std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>>().swap(v_acc_static);
             std::vector<Eigen::Vector3d, Eigen::aligned_allocator<Eigen::Vector3d>>().swap(v_gyr_static);
         }
-        else if(avg_velocity.norm() < 0.1)
+        else if(avg_velocity.norm() < 0.5) // HACK to make it start... >.>
         {
             Eigen::Vector3d g_sum = Eigen::Vector3d::Zero();
             Eigen::Vector3d bg_sum = Eigen::Vector3d::Zero();
@@ -157,7 +157,7 @@ void lioOptimization::staticInitialization(cloudFrame *p_frame)
         }
         else
         {
-            std::cout << "the hardware platform has moved, static init failed!" << std::endl;
+            std::cout << "the hardware platform has moved, static init failed! v: " << avg_velocity.norm() << std::endl;
         }
     }
     else
