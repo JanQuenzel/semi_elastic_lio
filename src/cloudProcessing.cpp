@@ -111,7 +111,7 @@ void cloudProcessing::ousterHandler(const sensor_msgs::PointCloud2::ConstPtr &ms
     pcl::fromROSMsg(*msg, raw_cloud);
     int size = raw_cloud.points.size();
 
-    double dt_last_point;
+    double dt_last_point = 0;
 
     if (size == 0)
     {
@@ -119,8 +119,12 @@ void cloudProcessing::ousterHandler(const sensor_msgs::PointCloud2::ConstPtr &ms
 
         return;
     }
+    int last_valid_point_idx = size - 1;
+    for ( ; last_valid_point_idx >= 0; --last_valid_point_idx)
+        if ( raw_cloud.points[last_valid_point_idx].getVector3fMap().squaredNorm()  > 0.1f )
+            break;
 
-    if (raw_cloud.points[size - 1].t > 0)
+    if (raw_cloud.points[last_valid_point_idx].t > 0)
         given_offset_time = true;
     else
         given_offset_time = false;

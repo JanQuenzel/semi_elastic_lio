@@ -93,7 +93,7 @@ void lioOptimization::readParameters()
 
     // common
     nh.param<std::string>("common/lidar_topic", lidar_topic, "/points_raw");
-	nh.param<std::string>("common/imu_topic", imu_topic, "/imu_raw");
+    nh.param<std::string>("common/imu_topic", imu_topic, "/imu_raw");
     nh.param<int>("common/point_filter_num", para_int, 1);  cloud_pro->setPointFilterNum(para_int);
     nh.param<std::vector<double>>("common/gravity_acc", v_G, std::vector<double>());
     nh.param<bool>("debug_output", debug_output, false);
@@ -417,12 +417,12 @@ std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vect
         if(imu_buffer.size() < 60 || lidar_buffer.size() < 2 || time_buffer.size() < 2)
             return measurements;
 
-        if (!(imu_buffer.back()->header.stamp.toSec() > time_buffer.front().first + time_buffer.front().second))
+        if (!(imu_buffer.back()->header.stamp.toSec() > (time_buffer.front().first + time_buffer.front().second)))
         {
             return measurements;
         }
 
-        if (!(imu_buffer.front()->header.stamp.toSec() < time_buffer.front().first + time_buffer.front().second))
+        if (!(imu_buffer.front()->header.stamp.toSec() < (time_buffer.front().first + time_buffer.front().second)))
         {
             time_buffer.pop();
 
@@ -433,6 +433,7 @@ std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vect
             continue;
         }
 
+        //ASSUMES timestamp at the front
         double timestamp = time_buffer.front().first + time_buffer.front().second;
         double timestamp_begin = time_buffer.front().first;
         double timestamp_offset = time_buffer.front().second;
