@@ -1,5 +1,5 @@
 common:
-    lidar_topic:  "/os_cloud_node/points"
+    lidar_topic:  "/ouster/points"
     imu_topic:  "/dji_sdk/imu"
     point_filter_num: 4
     gravity_acc: [ 0.0, 0.0, 9.8065]
@@ -22,7 +22,7 @@ imu_parameter:
 
 extrinsic_parameter:
     extrinsic_enable:  false      # true: enable the online estimation of IMU-LiDAR extrinsic,
-    extrinsic_t: [0.0982146, 0.031775, -0.210836] # transforms a point from lidar into imu frame
+    extrinsic_t: [ 0.083, 0.0, -0.210 ] # transforms a point from lidar into imu frame
     extrinsic_R: [ 0, -1,  0,
                   -1,  0,  0,
                    0,  0, -1]
