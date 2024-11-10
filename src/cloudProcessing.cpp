@@ -155,6 +155,7 @@ void cloudProcessing::ousterHandler(const sensor_msgs::PointCloud2::ConstPtr &ms
         point_temp.point = point_temp.raw_point;
         point_temp.relative_time = raw_cloud.points[i].t * time_unit_scale;
 
+#ifdef BLUB_NOPE
         if (!given_offset_time)
         {
             int layer = raw_cloud.points[i].ring;
@@ -183,6 +184,7 @@ void cloudProcessing::ousterHandler(const sensor_msgs::PointCloud2::ConstPtr &ms
             point_temp.timestamp = point_temp.relative_time / double(1000) + msg->header.stamp.toSec();
             v_point_full.push_back(point_temp);
         }
+#endif
 
         if (given_offset_time && i % point_filter_num == 0)
         {
