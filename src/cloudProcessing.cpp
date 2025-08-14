@@ -111,6 +111,12 @@ void cloudProcessing::ousterHandler(const sensor_msgs::PointCloud2::ConstPtr &ms
     pcl::fromROSMsg(*msg, raw_cloud);
     int size = raw_cloud.points.size();
 
+    if ( v_raw_cloud_out )
+    {
+        v_raw_cloud_out->clear();
+        v_raw_cloud_out->reserve(size);
+    }
+
     double dt_last_point = 0;
 
     if (size == 0)
@@ -194,6 +200,16 @@ void cloudProcessing::ousterHandler(const sensor_msgs::PointCloud2::ConstPtr &ms
                 point_temp.alpha_time = point_temp.relative_time / dt_last_point;
 
                 v_cloud_out.push_back(point_temp);
+            }
+        }
+
+        if ( v_raw_cloud_out )
+        {
+            if (point_temp.raw_point.x() * point_temp.raw_point.x() + point_temp.raw_point.y() * point_temp.raw_point.y() + point_temp.raw_point.z() * point_temp.raw_point.z() > (blind * blind))
+            {
+                point_temp.timestamp = point_temp.relative_time / double(1000) + msg->header.stamp.toSec();
+                point_temp.alpha_time = point_temp.relative_time / dt_last_point;
+                v_raw_cloud_out->push_back(point_temp);
             }
         }
     }

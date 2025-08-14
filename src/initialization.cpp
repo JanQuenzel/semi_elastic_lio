@@ -58,7 +58,7 @@ void lioOptimization::motionInitialization()
             ROS_INFO("misalign lidar structure with IMU");
 
         if(result == true)
-            initial_flag = true;    
+            initial_flag = true;
     }
 }
 
@@ -66,7 +66,8 @@ void lioOptimization::staticInitialization(cloudFrame *p_frame)
 {
     if(p_frame->frame_id == 1) time_init = p_frame->time_sweep_begin;
 
-    if(p_frame->time_sweep_end - time_init > 3.0)
+    //if(p_frame->time_sweep_end - time_init > 3.0)
+    if(p_frame->time_sweep_end - time_init > 2.0)
     {
         Eigen::Vector3d avg_velocity = p_frame->p_state->translation / (p_frame->time_sweep_end - time_init);
 

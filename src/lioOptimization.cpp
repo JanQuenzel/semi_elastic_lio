@@ -1,6 +1,8 @@
 #include "lioOptimization.h"
 
 std::shared_ptr<std::ofstream> posesFile = nullptr;
+bool store_compensated = false;
+int64_t lidar_ts_ns = 0;
 
 cloudFrame::cloudFrame(std::vector<point3D> &point_frame_, std::vector<point3D> &const_frame_, state *p_state_)
 {
@@ -74,8 +76,8 @@ lioOptimization::lioOptimization()
     pub_odom = nh.advertise<nav_msgs::Odometry>("/Odometry_after_opt", 5);
     pub_path = nh.advertise<nav_msgs::Path>("/path", 5);
 
-    sub_cloud_ori = nh.subscribe<sensor_msgs::PointCloud2>(lidar_topic, 20, &lioOptimization::standardCloudHandler, this);
-    sub_imu_ori = nh.subscribe<sensor_msgs::Imu>(imu_topic, 500, &lioOptimization::imuHandler, this);
+    sub_cloud_ori = nh.subscribe<sensor_msgs::PointCloud2>(lidar_topic, 2, &lioOptimization::standardCloudHandler, this);
+    sub_imu_ori = nh.subscribe<sensor_msgs::Imu>(imu_topic, 50, &lioOptimization::imuHandler, this);
 
     path.header.stamp = ros::Time::now();
     path.header.frame_id ="camera_init";
@@ -90,6 +92,8 @@ void lioOptimization::readParameters()
     double para_double;
     bool para_bool;
     std::string str_temp;
+
+    nh.param<bool>("store_compensated", store_compensated, false);
 
     // common
     nh.param<std::string>("common/lidar_topic", lidar_topic, "/points_raw");
@@ -375,10 +379,19 @@ void lioOptimization::standardCloudHandler(const sensor_msgs::PointCloud2::Const
     std::vector<point3D> v_point_cloud;
     double dt_offset;
 
+    if ( store_compensated )
+        cloud_pro->v_raw_cloud_out = std::make_shared<std::vector<point3D>>();
+
     cloud_pro->process(msg, v_point_cloud, dt_offset);
 
     boost::mt19937_64 g;
     std::shuffle(v_point_cloud.begin(), v_point_cloud.end(), g);
+
+    if ( store_compensated )
+    {
+        lidar_buffer_raw.push(std::move(*cloud_pro->v_raw_cloud_out));
+    }
+    time_buffer_ns.push(msg->header.stamp.toNSec());
 
     subSampleFrame(v_point_cloud, sample_size);
 
@@ -408,9 +421,9 @@ void lioOptimization::imuHandler(const sensor_msgs::Imu::ConstPtr &msg)
     last_time_imu = msg_temp->header.stamp.toSec();
 }
 
-std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vector<point3D>>, std::pair<double, double>>> lioOptimization::getMeasurements()
+std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::pair<std::vector<point3D>,std::vector<point3D>>>, std::pair<double, double>>> lioOptimization::getMeasurements()
 {
-    std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vector<point3D>>, std::pair<double, double>>> measurements;
+    std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::pair<std::vector<point3D>,std::vector<point3D>> >, std::pair<double, double>>> measurements;
 
     while (true)
     {
@@ -430,6 +443,14 @@ std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vect
             assert(lidar_buffer.front().size() == 0);
             lidar_buffer.pop();
 
+            time_buffer_ns.pop();
+
+            if ( store_compensated )
+            {
+                std::vector<point3D>().swap(lidar_buffer_raw.front());
+                assert(lidar_buffer_raw.front().size() == 0);
+                lidar_buffer_raw.pop();
+            }
             continue;
         }
 
@@ -438,6 +459,9 @@ std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vect
         double timestamp_begin = time_buffer.front().first;
         double timestamp_offset = time_buffer.front().second;
         time_buffer.pop();
+
+        lidar_ts_ns = time_buffer_ns.front();
+        time_buffer_ns.pop();
 
         if (fabs(timestamp_begin - time_buffer.front().first) > 1e-5)
         {
@@ -459,6 +483,16 @@ std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vect
         assert(lidar_buffer.front().size() == 0);
         lidar_buffer.pop();
 
+        std::vector<point3D> v_point_cloud_raw;
+        if ( store_compensated )
+        {
+            v_point_cloud_raw = lidar_buffer_raw.front();
+
+            std::vector<point3D>().swap(lidar_buffer_raw.front());
+            assert(lidar_buffer_raw.front().size() == 0);
+            lidar_buffer_raw.pop();
+        }
+
         std::vector<sensor_msgs::ImuConstPtr> imu_measurements;
         while (imu_buffer.front()->header.stamp.toSec() < timestamp)
         {
@@ -471,7 +505,7 @@ std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vect
         if (imu_measurements.empty())
             ROS_WARN("no imu between two sweeps");
 
-        measurements.emplace_back(std::make_pair(imu_measurements, v_point_cloud), std::make_pair(timestamp_begin, timestamp_offset));
+        measurements.emplace_back(std::make_pair(imu_measurements, std::make_pair(v_point_cloud,v_point_cloud_raw)), std::make_pair(timestamp_begin, timestamp_offset));
         break;
     }
     return measurements;
@@ -503,6 +537,59 @@ void lioOptimization::makePointTimestamp(std::vector<point3D> &sweep, double tim
         }
     }
 }
+
+cloudFrame* lioOptimization::buildFrameRaw(std::vector<point3D> &const_frame, state *cur_state, double timestamp_begin, double timestamp_offset, size_t id)
+{
+    std::vector<point3D> frame(const_frame);
+
+    double offset_begin = 0;
+    double offset_end = timestamp_offset;
+
+    double dt_offset = 0;
+
+    if(index_frame > 1)
+        dt_offset -= timestamp_begin - all_cloud_frame.back()->time_sweep_end;
+
+    makePointTimestamp(frame, timestamp_begin, timestamp_begin + timestamp_offset);
+
+    if (index_frame <= 2) {
+        for (auto &point_temp: frame) {
+            point_temp.alpha_time = 1.0;
+        }
+    }
+
+    if (index_frame > 2) {
+        if (options.motion_compensation == CONSTANT_VELOCITY || (options.motion_compensation == IMU && !initial_flag)) {
+            distortFrameUsingConstant(frame, cur_state->rotation_begin, cur_state->rotation, cur_state->translation_begin, cur_state->translation, R_imu_lidar, t_imu_lidar);
+        }
+        else if (options.motion_compensation == IMU && initial_flag) {
+            distortFrameUsingImu(frame, cur_state, R_imu_lidar, t_imu_lidar);
+        }
+
+        for (auto &point_temp: frame) {
+            transformPoint(options.motion_compensation, point_temp, cur_state->rotation_begin, cur_state->rotation, cur_state->translation_begin, cur_state->translation, R_imu_lidar, t_imu_lidar);
+        }
+    }
+    else
+    {
+        for (auto &point_temp: frame) {
+            Eigen::Quaterniond q_identity = Eigen::Quaterniond::Identity();
+            Eigen::Vector3d t_zero = Eigen::Vector3d::Zero();
+            transformPoint(options.motion_compensation, point_temp, q_identity, q_identity, t_zero, t_zero, R_imu_lidar, t_imu_lidar);
+        }
+    }
+
+    cloudFrame *p_frame = new cloudFrame(frame, const_frame, cur_state);
+    p_frame->time_sweep_begin = timestamp_begin;
+    p_frame->time_sweep_end = timestamp_begin + timestamp_offset;
+    p_frame->offset_begin = offset_begin;
+    p_frame->offset_end = offset_end;
+    p_frame->dt_offset = dt_offset;
+    p_frame->id = id;
+    p_frame->frame_id = index_frame;
+    return p_frame;
+}
+
 
 cloudFrame* lioOptimization::buildFrame(std::vector<point3D> &const_frame, state *cur_state, double timestamp_begin, double timestamp_offset)
 {
@@ -760,7 +847,7 @@ bool lioOptimization::assessRegistration(const cloudFrame *p_frame, estimationSu
     return success;
 }
 
-estimationSummary lioOptimization::poseEstimation(cloudFrame *p_frame)
+estimationSummary lioOptimization::poseEstimation(cloudFrame *p_frame, cloudFrame *p_frame_raw)
 {
     auto start = std::chrono::steady_clock::now();
 
@@ -926,13 +1013,20 @@ estimationSummary lioOptimization::poseEstimation(cloudFrame *p_frame)
     return summary;
 }
 
-void lioOptimization::stateEstimation(std::vector<point3D> &const_frame, double timestamp_begin, double timestamp_offset)
+void lioOptimization::stateEstimation(std::vector<point3D> &const_frame, std::vector<point3D> & points_raw, double timestamp_begin, double timestamp_offset)
 {
     stateInitialization(imu_pro->current_state);
 
+    cloudFrame* p_frame_raw = nullptr;
+    if ( store_compensated )
+        p_frame_raw = buildFrameRaw(points_raw, imu_pro->current_state, timestamp_begin, timestamp_offset, 0);
+
     cloudFrame *p_frame = buildFrame(const_frame, imu_pro->current_state, timestamp_begin, timestamp_offset);
 
-    estimationSummary summary = poseEstimation(p_frame);
+    if ( store_compensated )
+        p_frame_raw->id = p_frame->id;
+
+    estimationSummary summary = poseEstimation(p_frame, p_frame_raw);
     summary.release();
 
     if (options.optimize_options.solver == LIO && !initial_flag)
@@ -971,6 +1065,33 @@ void lioOptimization::stateEstimation(std::vector<point3D> &const_frame, double 
         std::string pcd_path(output_path + "/cloud_frame/" + std::to_string(index_frame) + std::string(".pcd"));
         saveCutCloud(pcd_path, p_cloud_temp);
     }
+
+    if ( store_compensated )
+    {
+        static int pcd_save_interval = 25;
+        static int scan_wait_num = 0;
+        static int64_t prev_pcd_end_time = lidar_ts_ns;
+        scan_wait_num ++;
+
+        const int size = p_frame_raw->point_frame.size();
+        if ( scan_wait_num >= pcd_save_interval && size > 0 )
+        {
+            pcl::PointCloud<pcl::PointXYZINormal>::Ptr p_cloud_temp;
+            p_cloud_temp.reset(new pcl::PointCloud<pcl::PointXYZINormal>());
+            point3DtoPCL(p_frame_raw->point_frame, p_cloud_temp);
+
+            std::string pcd_path(output_path + "/clouds/" + std::to_string(prev_pcd_end_time) + std::string(".pcd"));
+            std::cerr << "trying to write pcd to: " << pcd_path << " s: " << p_cloud_temp->size() << " " << p_frame_raw->const_frame.size() << std::endl;
+
+            saveCutCloud(pcd_path, p_cloud_temp);
+
+            scan_wait_num = 0;
+            prev_pcd_end_time = //p_frame_raw->lidar_end_time * 1e9;
+                int64_t(1e9 * p_frame_raw->time_sweep_end);
+        }
+    }
+    if ( p_frame_raw != nullptr )
+        delete p_frame_raw;
 
     int num_remove = 0;
 
@@ -1101,7 +1222,9 @@ void lioOptimization::publish_odometry(const ros::Publisher & pubOdomAftMapped, 
         if ( ! posesFile ) posesFile = std::make_shared<std::ofstream>("./semi_elastic_lio_after_map_poses.txt");
         if( posesFile && posesFile->is_open() )
         {
-             (*posesFile) << int64_t(1e9 * p_frame->time_sweep_end) << " " << p_frame->p_state->translation.x() << " " << p_frame->p_state->translation.y() << " " << p_frame->p_state->translation.z()
+             (*posesFile) //<< int64_t(1e9 * p_frame->time_sweep_end)
+                          << lidar_ts_ns
+                          << " " << p_frame->p_state->translation.x() << " " << p_frame->p_state->translation.y() << " " << p_frame->p_state->translation.z()
                           << " " << p_frame->p_state->rotation.x() << " " << p_frame->p_state->rotation.y() << " " << p_frame->p_state->rotation.z() << " " << p_frame->p_state->rotation.w() << std::endl;
         }
     }
@@ -1109,13 +1232,14 @@ void lioOptimization::publish_odometry(const ros::Publisher & pubOdomAftMapped, 
 
 void lioOptimization::run()
 {
-    std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vector<point3D>>, std::pair<double, double>>> measurements = getMeasurements();
+    std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::pair<std::vector<point3D>,std::vector<point3D>> >, std::pair<double, double>>> measurements = getMeasurements();
 
     if(measurements.size() == 0) return;
 
     for (auto &measurement : measurements)
     {
-        auto v_point_cloud = measurement.first.second;
+        auto v_point_cloud = measurement.first.second.first;
+        auto v_point_cloud_raw = measurement.first.second.second;
         double time_frame = measurement.second.first + measurement.second.second;
         double dx = 0, dy = 0, dz = 0, rx = 0, ry = 0, rz = 0;
 
@@ -1165,12 +1289,13 @@ void lioOptimization::run()
             }
         }
 
-        stateEstimation(v_point_cloud, measurement.second.first, measurement.second.second);
+        stateEstimation(v_point_cloud, v_point_cloud_raw, measurement.second.first, measurement.second.second);
         
         last_time_frame = time_frame;
         index_frame++;
 
-        std::vector<point3D>().swap(measurement.first.second);
+        std::vector<point3D>().swap(measurement.first.second.first);
+        std::vector<point3D>().swap(measurement.first.second.second);
     }
 }
 

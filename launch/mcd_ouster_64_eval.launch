@@ -4,9 +4,10 @@
     <arg name="rviz" default="false" />
     <param name="/use_sim_time" value="true" />
 
-    <rosparam command="load" file="$(find semi_elastic_lio)/config/nc.yaml" />
+    <rosparam command="load" file="$(find semi_elastic_lio)/config/mcd_ouster64.yaml" />
 
-    <param name="debug_output" type="bool" value="0"/>
+    <param name="debug_output" type="bool" value="false"/>
+    <param name="store_compensated" type="bool" value="false"/>
     <param name="output_path" type="string" value="$(find semi_elastic_lio)/output"/>
     <node pkg="semi_elastic_lio" type="lio_optimization" name="lio_optimization" output="screen" />
     <!-- launch-prefix="gdb -ex run - -args "  -->

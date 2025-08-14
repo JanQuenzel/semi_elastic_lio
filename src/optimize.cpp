@@ -758,6 +758,8 @@ estimationSummary lioOptimization::optimize(cloudFrame *p_frame, const icpOption
             return summary;
         }
 
+
+        // TODO: do THIS for raw points? + initial transform?
         Eigen::Quaterniond q_begin = p_frame->p_state->rotation_begin;
         Eigen::Quaterniond q_end = p_frame->p_state->rotation;
         Eigen::Vector3d t_begin = p_frame->p_state->translation_begin;

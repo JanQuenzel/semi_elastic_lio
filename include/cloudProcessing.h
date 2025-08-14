@@ -135,12 +135,15 @@ private:
 	std::vector<pcl::PointCloud<pcl::PointXYZINormal>> scan_cloud;
 	std::vector<std::vector<extraElement>> v_extra_elem;
 
+
 	// function
 	void ousterHandler(const sensor_msgs::PointCloud2::ConstPtr &msg, std::vector<point3D> &v_cloud_out, double &dt_offset);
 	void velodyneHandler(const sensor_msgs::PointCloud2::ConstPtr &msg, std::vector<point3D> &v_cloud_out, double &dt_offset);
 	void robosenseHandler(const sensor_msgs::PointCloud2::ConstPtr &msg, std::vector<point3D> &v_cloud_out, double &dt_offset);
 
 public:
+
+        std::shared_ptr<std::vector<point3D>> v_raw_cloud_out = nullptr;
 
 	cloudProcessing();
 

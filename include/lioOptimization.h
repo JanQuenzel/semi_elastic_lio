@@ -184,8 +184,10 @@ private:
     Eigen::Vector3d pose_lid;
 
     std::queue<std::pair<double, double>> time_buffer;
+    std::queue<int64_t> time_buffer_ns;
     std::queue<std::vector<pcl::PointCloud<pcl::PointXYZINormal>::Ptr>> feature_buffer;
     std::queue<std::vector<point3D>> lidar_buffer;
+    std::queue<std::vector<point3D>> lidar_buffer_raw;
     std::queue<sensor_msgs::Imu::ConstPtr> imu_buffer;
 
     std::vector<cloudFrame*> all_cloud_frame;
@@ -241,16 +243,17 @@ public:
 
 	void imuHandler(const sensor_msgs::Imu::ConstPtr &msg);
 
-    std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::vector<point3D>>, std::pair<double, double>>> getMeasurements();
+    std::vector<std::pair<std::pair<std::vector<sensor_msgs::ImuConstPtr>, std::pair<std::vector<point3D>,std::vector<point3D>> >, std::pair<double, double>>> getMeasurements();
 
     // main loop
-    void stateEstimation(std::vector<point3D> &const_frame, double timestamp_begin, double timestamp_offset);
+    void stateEstimation(std::vector<point3D> &const_frame, std::vector<point3D> &points_raw, double timestamp_begin, double timestamp_offset);
 
 	void run();
     // main loop
 
     // data pre-processing
     cloudFrame* buildFrame(std::vector<point3D> &const_frame, state *cur_state, double timestamp_begin, double timestamp_offset);
+    cloudFrame* buildFrameRaw(std::vector<point3D> &const_frame, state *cur_state, double timestamp_begin, double timestamp_offset, size_t id);
 
     void makePointTimestamp(std::vector<point3D> &sweep, double time_sweep_begin, double time_sweep_end);
 
@@ -276,7 +279,7 @@ public:
     // initialization
 
     // state estimation
-    estimationSummary poseEstimation(cloudFrame *p_frame);
+    estimationSummary poseEstimation(cloudFrame *p_frame, cloudFrame *p_frame_raw);
 
     estimationSummary optimize(cloudFrame *p_frame, const icpOptions &cur_icp_options, estimationSummary &summary, double sample_voxel_size);
 
